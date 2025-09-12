@@ -9,8 +9,12 @@ from gtts import gTTS
 import json
 import google.generativeai as genai
 from dotenv import load_dotenv
+
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+# ✅ Streamlit input instead of argparse
+user_input = st.text_input("Enter your input:")
 
 # Configure page
 st.set_page_config(
