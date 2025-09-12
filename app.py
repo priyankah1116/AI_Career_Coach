@@ -4,9 +4,14 @@ import io
 import tempfile
 from datetime import datetime
 from fpdf import FPDF
+from fpdf.enums import XPos, YPos
 from gtts import gTTS
 import json
 import google.generativeai as genai
+from dotenv import load_dotenv
+load_dotenv()
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
 # Configure page
 st.set_page_config(
     page_title="AI Career Coach",
@@ -14,6 +19,7 @@ st.set_page_config(
     layout="centered",
     initial_sidebar_state="expanded"
 )
+
 # Configure Google Gemini API
 def get_gemini_client():
     """Get Gemini client with API key from environment or secrets"""
@@ -39,6 +45,7 @@ def get_gemini_client():
         
     genai.configure(api_key=api_key)
     return genai
+
 def call_ai(prompt, system=None, model="gemini-1.5-flash"):
     """
     Call Google Gemini API for AI responses
@@ -71,6 +78,7 @@ def call_ai(prompt, system=None, model="gemini-1.5-flash"):
         
     except Exception as e:
         return f"Error: {str(e)}"
+
 def generate_pdf(text, filename="document.pdf"):
     """Generate PDF from text content"""
     try:
@@ -124,6 +132,7 @@ def generate_pdf(text, filename="document.pdf"):
     except Exception as e:
         st.error(f"PDF generation error: {str(e)}")
         return None
+
 def generate_tts(text, filename="audio.mp3"):
     """Generate text-to-speech audio file"""
     try:
@@ -138,14 +147,18 @@ def generate_tts(text, filename="audio.mp3"):
     except Exception as e:
         st.error(f"TTS generation error: {str(e)}")
         return None
+
 def utility_buttons(content, content_type="document"):
     """Add utility buttons for copy, download, TTS, and like/dislike"""
+    # Generate unique ID based on content length and timestamp to avoid key conflicts
+    unique_id = f"{content_type}_{len(content)}_{id(content)}"
+    
     col1, col2, col3, col4, col5 = st.columns(5)
     
     with col1:
-        if st.button("📋 Copy", key=f"copy_{content_type}_{hash(content)}", help="Copy to clipboard"):
+        if st.button("📋 Copy", key=f"copy_{unique_id}", help="Copy to clipboard"):
             # Since direct clipboard access is limited, show content in a text area for manual copy
-            st.text_area("Copy this content:", value=content, height=100, key=f"copy_area_{hash(content)}")
+            st.text_area("Copy this content:", value=content, height=100, key=f"copy_area_{unique_id}")
             st.success("Content displayed above - select all and copy!")
     
     with col2:
@@ -156,14 +169,14 @@ def utility_buttons(content, content_type="document"):
                 data=pdf_bytes,
                 file_name=f"{content_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                 mime="application/pdf",
-                key=f"pdf_{content_type}_{hash(content)}",
+                key=f"pdf_{unique_id}",
                 help="Download as PDF file"
             )
         else:
-            st.button("⬇️ PDF", disabled=True, help="PDF generation failed")
+            st.button("⬇️ PDF", disabled=True, help="PDF generation failed", key=f"pdf_disabled_{unique_id}")
     
     with col3:
-        if st.button("🔊 TTS", key=f"tts_{content_type}_{hash(content)}", help="Text to Speech"):
+        if st.button("🔊 TTS", key=f"tts_{unique_id}", help="Text to Speech"):
             with st.spinner("Generating audio..."):
                 audio_bytes = generate_tts(content)
                 if audio_bytes:
@@ -173,22 +186,23 @@ def utility_buttons(content, content_type="document"):
                         data=audio_bytes,
                         file_name=f"{content_type}_audio_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp3",
                         mime="audio/mp3",
-                        key=f"audio_{content_type}_{hash(content)}"
+                        key=f"audio_{unique_id}"
                     )
     
     with col4:
-        if st.button("👍", key=f"like_{content_type}_{hash(content)}"):
+        if st.button("👍", key=f"like_{unique_id}"):
             if f"likes_{content_type}" not in st.session_state:
                 st.session_state[f"likes_{content_type}"] = 0
             st.session_state[f"likes_{content_type}"] += 1
             st.success("Liked! 👍")
     
     with col5:
-        if st.button("👎", key=f"dislike_{content_type}_{hash(content)}"):
+        if st.button("👎", key=f"dislike_{unique_id}"):
             if f"dislikes_{content_type}" not in st.session_state:
                 st.session_state[f"dislikes_{content_type}"] = 0
             st.session_state[f"dislikes_{content_type}"] += 1
             st.info("Feedback noted 👎")
+
 def resume_generator():
     st.header("📄 Resume Generator")
     st.markdown("Create an ATS-friendly resume tailored to your target career - perfect for any field of study")
@@ -249,14 +263,25 @@ def resume_generator():
                 resume_content = call_ai(prompt, system_prompt)
                 
                 if not resume_content.startswith("Error:"):
+                    # Store in session state to persist across reruns
+                    st.session_state.generated_resume = resume_content
                     st.success("✅ Resume generated successfully!")
-                    st.markdown("### Your Generated Resume:")
-                    st.markdown(resume_content)
-                    
-                    # Add utility buttons outside form context
-                    utility_buttons(resume_content, "resume")
                 else:
                     st.error(f"Failed to generate resume: {resume_content}")
+    
+    # Display generated resume if it exists in session state
+    if "generated_resume" in st.session_state and st.session_state.generated_resume:
+        st.markdown("### Your Generated Resume:")
+        st.markdown(st.session_state.generated_resume)
+        
+        # Add utility buttons
+        utility_buttons(st.session_state.generated_resume, "resume")
+        
+        # Add clear button
+        if st.button("🗑️ Clear Resume", key="clear_resume"):
+            del st.session_state.generated_resume
+            st.rerun()
+
 def cover_letter_generator():
     st.header("📝 Cover Letter Generator")
     st.markdown("Create compelling, personalized cover letters that match job requirements")
@@ -321,14 +346,25 @@ def cover_letter_generator():
                 cover_letter_content = call_ai(prompt, system_prompt)
                 
                 if not cover_letter_content.startswith("Error:"):
+                    # Store in session state to persist across reruns
+                    st.session_state.generated_cover_letter = cover_letter_content
                     st.success("✅ Cover letter generated successfully!")
-                    st.markdown("### Your Generated Cover Letter:")
-                    st.markdown(cover_letter_content)
-                    
-                    # Add utility buttons outside form context
-                    utility_buttons(cover_letter_content, "cover_letter")
                 else:
                     st.error(f"Failed to generate cover letter: {cover_letter_content}")
+    
+    # Display generated cover letter if it exists in session state
+    if "generated_cover_letter" in st.session_state and st.session_state.generated_cover_letter:
+        st.markdown("### Your Generated Cover Letter:")
+        st.markdown(st.session_state.generated_cover_letter)
+        
+        # Add utility buttons
+        utility_buttons(st.session_state.generated_cover_letter, "cover_letter")
+        
+        # Add clear button
+        if st.button("🗑️ Clear Cover Letter", key="clear_cover_letter"):
+            del st.session_state.generated_cover_letter
+            st.rerun()
+
 def career_advice_chat():
     st.header("💬 Career Advice Chat")
     st.markdown("Get personalized career guidance from your AI coach")
@@ -418,6 +454,7 @@ def career_advice_chat():
             if "quick_topic" in st.session_state:
                 del st.session_state.quick_topic
             st.rerun()
+
 def mock_interview():
     st.header("🎤 Mock Interview Practice")
     st.markdown("Practice interviews with AI-generated questions and get feedback on your responses")
@@ -610,6 +647,7 @@ def mock_interview():
                 st.session_state.interview_answers = {}
                 st.session_state.current_question_index = 0
                 st.rerun()
+
 def about_page():
     st.header("ℹ️ About AI Career Coach")
     
@@ -654,7 +692,7 @@ def about_page():
     - **Feedback System**: Like/dislike buttons to improve AI responses
     
     ### 🔧 Technology:
-    - **AI Model**: Powered by Google Gemini 2.5 for intelligent, contextual responses
+    - **AI Model**: Powered by Google Gemini for intelligent, contextual responses
     - **Framework**: Built with Streamlit for a smooth, interactive experience
     - **Export Options**: FPDF for document generation, gTTS for audio synthesis
     
@@ -693,6 +731,7 @@ def about_page():
                 st.error(f"❌ API test failed: {test_response}")
     else:
         st.warning("⚠️ No API key configured. Please add your Gemini API key to get started.")
+
 def main():
     # Initialize session state variables
     if "chat_history" not in st.session_state:
@@ -771,5 +810,6 @@ def main():
         mock_interview()
     elif page == "About":
         about_page()
+
 if __name__ == "__main__":
     main()
