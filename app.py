@@ -24,6 +24,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Title and input
+st.title("Welcome to AI Career Coach Pro 💼")
+user_input = st.text_input("Enter your career question or goal:")
+
+if user_input:
+    st.write(f"Processing your input: {user_input}")
+    # You can add your AI logic here
+
 # Configure Google Gemini API
 def get_gemini_client():
     """Get Gemini client with API key from environment or secrets"""
