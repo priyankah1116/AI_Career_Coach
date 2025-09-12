@@ -12,26 +12,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
-# ✅ Streamlit input instead of argparse
-user_input = st.text_input("Enter your input:")
-
 # Configure page
 st.set_page_config(
-    page_title="AI Career Coach",
+    page_title="AI Career Coach pro",
     page_icon="💼",
     layout="centered",
     initial_sidebar_state="expanded"
 )
-
-# Title and input
-st.title("Welcome to AI Career Coach Pro 💼")
-user_input = st.text_input("Enter your career question or goal:")
-
-if user_input:
-    st.write(f"Processing your input: {user_input}")
-    # You can add your AI logic here
-
 # Configure Google Gemini API
 def get_gemini_client():
     """Get Gemini client with API key from environment or secrets"""
@@ -745,30 +732,83 @@ def about_page():
         st.warning("⚠️ No API key configured. Please add your Gemini API key to get started.")
 
 def main():
-    st.subheader("Your Personalized Career Assistant 🎯")
+    # Initialize session state variables
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    if "interview_questions" not in st.session_state:
+        st.session_state.interview_questions = []
+    if "interview_answers" not in st.session_state:
+        st.session_state.interview_answers = {}
+    if "current_question_index" not in st.session_state:
+        st.session_state.current_question_index = 0
+    
+    # Header
+    st.title("💼 AI Career Coach")
+    st.markdown("*Your AI-powered career development companion for all fields*")
+    
+    # Sidebar navigation
+    st.sidebar.title("Navigation")
+    
+    # API Key configuration in sidebar
+    client = get_gemini_client()
+    
+    if not client:
+        st.sidebar.markdown("### ⚙️ API Configuration")
+        st.sidebar.info("🔑 Google Gemini API key required")
+        st.sidebar.markdown("""
+        **Setup Instructions:**
+        1. Get your free API key from [Google AI Studio](https://makersuite.google.com/app/apikey)
+        2. Add it to your environment variables as `GEMINI_API_KEY`
+        3. Or enter it below (temporary for this session)
+        """)
+        st.sidebar.text_input(
+            "Gemini API Key",
+            type="password",
+            key="api_key_input",
+            help="Enter your Google Gemini API key"
+        )
+        
+        if st.session_state.get("api_key_input"):
+            st.sidebar.success("✅ API key entered")
+    else:
+        st.sidebar.success("✅ Gemini API configured")
+        if st.sidebar.button("🧪 Test API"):
+            test_response = call_ai("Say hello in a friendly way.")
+            if not test_response.startswith("Error:"):
+                st.sidebar.success("✅ API connection successful!")
+            else:
+                st.sidebar.error(f"❌ API test failed")
+    
+    # Navigation menu
+    page = st.sidebar.selectbox(
+        "Choose a section:",
+        ["Resume Generator", "Cover Letter", "Career Advice", "Mock Interview", "About"]
+    )
+    
+    # Add some helpful info in sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 💡 Quick Tips")
+    
+    if page == "Resume Generator":
+        st.sidebar.info("📄 Upload job descriptions for better tailoring")
+    elif page == "Cover Letter":
+        st.sidebar.info("📝 Research the company before generating")
+    elif page == "Career Advice":
+        st.sidebar.info("💬 Ask specific questions for better advice")
+    elif page == "Mock Interview":
+        st.sidebar.info("🎤 Practice out loud for best results")
+    
+    # Page routing
+    if page == "Resume Generator":
+        resume_generator()
+    elif page == "Cover Letter":
+        cover_letter_generator()
+    elif page == "Career Advice":
+        career_advice_chat()
+    elif page == "Mock Interview":
+        mock_interview()
+    elif page == "About":
+        about_page()
 
-    user_input = st.text_area("Describe your career goal, challenge, or question:")
-
-    if st.button("Get AI Advice"):
-        if user_input:
-            st.info("Generating response...")
-
-            # Call Gemini API
-            response = call_ai(user_input)
-
-            # Display response
-            st.success("Here's your AI-powered advice:")
-            st.write(response)
-
-            # Generate and offer PDF download
-            pdf_bytes = generate_pdf(user_input, response)
-            st.download_button(
-                label="Download Advice as PDF",
-                data=pdf_bytes,
-                file_name="career_advice.pdf",
-                mime="application/pdf"
-            )
-        else:
-            st.warning("Please enter a question or goal to get started.")
-            if __name__ == "__main__":
-                main()
+if __name__ == "__main__":
+    main()
